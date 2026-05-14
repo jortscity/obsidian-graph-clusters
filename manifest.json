@@ -1,7 +1,7 @@
 {
   "id": "obsidian-semantic-clusters",
   "name": "Semantic Cluster Plugin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minAppVersion": "1.0.0",
   "description": "Generates semantic cluster notes and folder tree notes from vault contents. Zero footprint in actual vault notes.",
   "author": "jortscity",

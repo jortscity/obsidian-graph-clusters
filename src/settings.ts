@@ -170,5 +170,136 @@ export class SemanticClusterSettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+
+    // ── Actions ──────────────────────────────────────────────────────────
+    containerEl.createEl("h3", { text: "Actions" });
+
+    new Setting(containerEl)
+      .setName("Re-embed vault")
+      .setDesc("Force re-embedding of every note; updates the cache only.")
+      .addButton((btn) =>
+        btn
+          .setButtonText("Re-embed")
+          .onClick(() => this.plugin.reEmbedVault())
+      );
+
+    new Setting(containerEl)
+      .setName("Regenerate cluster notes")
+      .setDesc(
+        `Delete and recreate everything in "${this.plugin.settings.pluginFolderName}/clusters".`
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Regenerate clusters")
+          .setWarning()
+          .onClick(() => this.plugin.promptRegenerateClusters())
+      );
+
+    new Setting(containerEl)
+      .setName("Regenerate folder notes")
+      .setDesc(
+        `Delete and recreate everything in "${this.plugin.settings.pluginFolderName}/folder-notes".`
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText("Regenerate folder notes")
+          .setWarning()
+          .onClick(() => this.plugin.promptRegenerateFolderNotes())
+      );
+
+    // ── Histogram ────────────────────────────────────────────────────────
+    containerEl.createEl("h3", { text: "Cluster histogram" });
+
+    const currentMethod = this.plugin.settings.clusteringMethod;
+    const histDesc = containerEl.createEl("p", {
+      text:
+        `Cluster shape at each similarity threshold using the configured method (${currentMethod}-linkage). ` +
+        "Persisted; refreshed automatically whenever embeddings are regenerated.",
+    });
+    histDesc.style.opacity = "0.7";
+
+    const histTableWrap = containerEl.createDiv();
+    const histStatus = containerEl.createEl("p");
+    histStatus.style.opacity = "0.7";
+
+    // Render the persisted histogram immediately if we have one. Async,
+    // fire-and-forget — the rest of the settings panel renders without waiting.
+    this.plugin.loadSavedHistogram().then((saved) => {
+      if (!saved) {
+        histStatus.setText(
+          "No histogram saved yet — regenerate clusters or click Recompute."
+        );
+        return;
+      }
+      const staleNote =
+        saved.method !== currentMethod
+          ? ` — STALE: saved as ${saved.method}-linkage, current setting is ${currentMethod}-linkage. Click Recompute.`
+          : "";
+      histStatus.setText(
+        `Computed ${new Date(saved.computedAt).toLocaleString()} (${saved.method}-linkage)${staleNote}`
+      );
+      this.renderHistogramTable(histTableWrap, saved.rows);
+    });
+
+    new Setting(containerEl)
+      .setName("Recompute histogram")
+      .setDesc(
+        "Force-refresh the histogram now using the configured clustering method. " +
+          "Uses cached embeddings; will embed missing notes first. " +
+          "Complete-linkage is significantly slower on large vaults."
+      )
+      .addButton((btn) =>
+        btn.setButtonText("Recompute").onClick(async () => {
+          histTableWrap.empty();
+          histStatus.setText("Computing…");
+          try {
+            const rows = await this.plugin.computeHistogram();
+            histStatus.setText(
+              `Computed ${new Date().toLocaleString()} (${this.plugin.settings.clusteringMethod}-linkage)`
+            );
+            this.renderHistogramTable(histTableWrap, rows);
+          } catch (e) {
+            histStatus.setText(`Error: ${(e as Error).message}`);
+          }
+        })
+      );
+  }
+
+  private renderHistogramTable(
+    parent: HTMLElement,
+    rows: {
+      threshold: number;
+      clusters: number;
+      largest: number;
+      covered: number;
+    }[]
+  ): void {
+    const table = parent.createEl("table");
+    table.style.borderCollapse = "collapse";
+    table.style.marginTop = "0.5em";
+
+    const header = table.createEl("tr");
+    // "Largest" exposes single-linkage chaining (one cluster swallowing the
+    // vault); "Covered" shows how many notes ended up in any cluster at all.
+    for (const label of ["Similarity ≥", "Clusters", "Largest", "Covered"]) {
+      const th = header.createEl("th", { text: label });
+      th.style.textAlign = "left";
+      th.style.padding = "2px 12px 2px 0";
+      th.style.borderBottom = "1px solid var(--background-modifier-border)";
+    }
+
+    for (const r of rows) {
+      const tr = table.createEl("tr");
+      const cells = [
+        r.threshold.toFixed(2),
+        String(r.clusters),
+        String(r.largest),
+        String(r.covered),
+      ];
+      for (const text of cells) {
+        const td = tr.createEl("td", { text });
+        td.style.padding = "2px 12px 2px 0";
+      }
+    }
   }
 }

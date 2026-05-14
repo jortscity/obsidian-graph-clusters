@@ -79,10 +79,18 @@ export class EmbeddingManager {
     env.allowLocalModels = false;
     env.allowRemoteModels = true;
     // Point the ONNX WASM runtime at a CDN so the plugin doesn't need to ship
-    // its own .wasm copies. Internet connectivity is already required for the
-    // initial model download, so this adds no new dependency.
+    // its own .wasm copies. The version MUST match the onnxruntime-web build
+    // bundled here (see package-lock.json) — the unversioned jsdelivr URL
+    // serves the latest release, whose .wasm files were renamed and are
+    // ABI-incompatible with older loaders, so leaving it unpinned silently
+    // breaks model loading.
     env.backends.onnx.wasm.wasmPaths =
-      "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+      "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
+    // Obsidian's renderer is not cross-origin isolated, so SharedArrayBuffer
+    // is unavailable and threaded WASM can't actually run. Force single-thread
+    // so onnxruntime-web fetches `ort-wasm.wasm` / `ort-wasm-simd.wasm` and
+    // doesn't try to spawn Web Workers.
+    env.backends.onnx.wasm.numThreads = 1;
 
     this.transformersPipeline = await pipeline(
       "feature-extraction",

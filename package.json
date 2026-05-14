@@ -1,6 +1,6 @@
 {
   "name": "obsidian-semantic-clusters",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Generates semantic cluster notes and folder tree notes from vault contents",
   "main": "main.js",
   "scripts": {
